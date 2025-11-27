@@ -1,0 +1,4446 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/MarkerCluster.css">
+        <link rel="stylesheet" href="css/MarkerCluster.Default.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title></title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/multi-style-layer.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet.markercluster.js"></script>
+        <script src="data/HvidovreLokalplan_1.js"></script>
+        <script src="data/HvidovreStrandbeskyttelse_2.js"></script>
+        <script src="data/FrededeomrderiHvidovreKommune_3.js"></script>
+        <script src="data/HvidovreKommune_4.js"></script>
+        <script src="data/Kirker_5.js"></script>
+        <script src="data/Bibliotek_6.js"></script>
+        <script src="data/Pizzarier_7.js"></script>
+        <script src="data/SkoleiHvidovre_8.js"></script>
+        <script src="data/Togstationer_9.js"></script>
+        <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+              highlightLayer.setStyle({
+                color: '#ffff00',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: '#ffff00',
+                fillOpacity: 1
+              });
+            }
+        }
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[55.59773331056811,12.361397044757242],[55.67267805155515,12.607384776136353]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_Baggrundskort_0');
+        map.getPane('pane_Baggrundskort_0').style.zIndex = 400;
+        var layer_Baggrundskort_0 = L.tileLayer('https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png', {
+            pane: 'pane_Baggrundskort_0',
+            opacity: 1.0,
+            attribution: '<a href="https://cartodb.com/basemaps/">Map tiles by CartoDB, under CC BY 3.0. Data by OpenStreetMap, under ODbL.</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 20
+        });
+        layer_Baggrundskort_0;
+        map.addLayer(layer_Baggrundskort_0);
+        function pop_HvidovreLokalplan_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+        }
+
+        function style_HvidovreLokalplan_1_0(feature) {
+            switch(String(feature.properties['q2wHide_FID'])) {
+                case '0':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,245,240,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '1':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,244,239,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '2':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,243,237,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '3':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,242,236,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '4':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,241,235,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '5':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,240,233,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '6':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,239,232,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '7':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,238,231,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '8':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,237,229,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '9':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,237,228,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '10':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,236,227,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '11':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,235,225,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '12':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,234,224,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '13':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,233,223,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '14':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,232,221,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '15':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,231,220,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '16':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,230,219,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '17':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,229,217,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '18':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,228,216,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '19':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,227,215,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '20':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,226,213,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '21':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,225,212,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '22':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,224,210,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '23':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,223,209,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '24':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,221,206,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '25':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,220,204,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '26':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,218,202,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '27':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,216,200,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '28':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,215,198,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '29':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,213,195,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '30':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,211,193,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '31':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,210,191,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '32':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,208,189,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '33':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,206,187,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '34':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,205,184,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '35':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,203,182,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '36':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,201,180,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '37':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,200,178,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '38':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,198,176,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '39':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,196,174,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '40':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,195,171,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '41':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,193,169,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '42':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,192,167,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '43':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,190,165,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '44':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,188,163,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '45':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,186,160,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '46':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,185,158,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '47':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,183,156,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '48':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,181,154,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '49':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,179,152,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '50':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,177,150,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '51':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,175,148,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '52':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,174,146,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '53':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,172,144,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '54':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,170,141,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '55':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,168,139,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '56':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,166,137,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '57':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,164,135,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '58':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,163,133,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '59':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,161,131,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '60':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,159,129,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '61':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,157,127,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '62':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,155,125,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '63':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,153,123,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '64':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,152,120,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '65':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,150,118,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '66':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,148,116,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '67':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,146,114,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '68':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,144,112,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '69':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,143,111,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '70':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,141,109,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '71':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,139,107,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '72':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,137,105,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '73':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,135,103,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '74':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,134,102,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '75':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,132,100,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '76':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,130,98,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '77':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,128,96,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '78':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(252,126,94,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '79':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,125,93,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '80':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,123,91,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '81':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,121,89,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '82':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,119,87,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '83':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,118,86,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '84':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,116,84,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '85':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,114,82,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '86':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,112,80,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '87':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,110,78,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '88':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,109,77,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '89':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,107,75,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '90':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,105,73,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '91':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(250,103,72,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '92':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(250,101,71,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '93':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(249,99,69,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '94':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(249,96,68,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '95':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(248,94,67,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '96':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(247,92,65,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '97':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(247,90,64,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '98':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(246,88,63,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '99':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(246,86,61,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '100':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(245,84,60,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '101':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(245,82,58,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '102':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,80,57,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '103':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,77,56,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '104':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(243,75,54,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '105':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(243,73,53,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '106':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,71,52,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '107':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,69,50,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '108':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(241,67,49,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '109':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(241,65,48,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '110':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(240,63,46,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '111':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(239,61,45,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '112':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(239,59,44,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '113':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(237,57,43,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '114':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(235,56,43,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '115':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(234,54,42,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '116':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(232,52,41,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '117':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(231,51,41,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '118':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,49,40,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '119':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(227,48,39,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '120':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(226,46,38,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '121':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(224,45,38,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '122':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(223,43,37,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '123':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(221,41,36,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '124':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(219,40,36,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '125':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(218,38,35,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '126':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(216,37,34,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '127':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(215,35,34,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '128':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(213,34,33,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '129':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(211,32,32,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '130':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(210,31,32,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '131':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(208,29,31,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '132':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(206,27,30,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '133':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(205,26,30,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '134':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(203,24,29,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '135':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(201,24,29,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '136':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(200,23,28,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '137':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(198,23,28,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '138':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(196,22,28,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '139':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(194,22,27,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '140':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(192,21,27,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '141':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(190,21,26,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '142':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(189,21,26,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '143':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(187,20,26,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '144':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(185,20,25,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '145':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(183,19,25,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '146':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(181,19,24,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '147':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(179,18,24,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '148':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(178,18,24,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '149':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(176,18,23,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '150':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(174,17,23,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '151':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(172,17,22,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '152':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(170,16,22,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '153':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(168,16,22,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '154':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(166,15,21,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '155':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(164,15,21,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '156':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(161,14,20,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '157':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(157,13,20,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '158':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(153,12,20,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '159':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(150,11,19,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '160':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(146,10,19,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '161':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(143,10,18,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '162':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(139,9,18,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '163':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(135,8,17,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '164':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(132,7,17,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '165':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(128,6,16,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '166':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(125,5,16,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '167':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(121,4,15,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '168':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(117,3,15,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '169':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(114,3,14,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '170':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(110,2,14,0.374)',
+                interactive: true,
+            }
+                    break;
+                case '171':
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(107,1,13,0.374)',
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_HvidovreLokalplan_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.374)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(103,0,13,0.374)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_HvidovreLokalplan_1');
+        map.getPane('pane_HvidovreLokalplan_1').style.zIndex = 401;
+        map.getPane('pane_HvidovreLokalplan_1').style['mix-blend-mode'] = 'normal';
+        var layer_HvidovreLokalplan_1 = new L.geoJson(json_HvidovreLokalplan_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_HvidovreLokalplan_1',
+            layerName: 'layer_HvidovreLokalplan_1',
+            pane: 'pane_HvidovreLokalplan_1',
+            onEachFeature: pop_HvidovreLokalplan_1,
+            style: style_HvidovreLokalplan_1_0,
+        });
+        bounds_group.addLayer(layer_HvidovreLokalplan_1);
+        map.addLayer(layer_HvidovreLokalplan_1);
+        function pop_HvidovreStrandbeskyttelse_2(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_HvidovreStrandbeskyttelse_2_0(feature) {
+            switch(String(feature.properties['fid'])) {
+                case '1':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(163,209,255,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '2':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(160,206,252,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '3':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(157,203,249,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '4':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(154,199,246,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '5':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(151,196,243,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '6':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(148,193,240,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '7':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(144,189,237,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '8':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(141,186,234,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '9':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(138,183,231,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '10':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(135,180,228,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '11':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(132,176,225,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '12':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(129,173,222,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '13':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(125,170,219,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '14':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(122,166,216,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '15':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(119,163,213,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '16':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(116,160,210,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '17':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(113,157,207,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '18':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(110,153,204,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '19':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(106,150,201,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '20':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(103,147,198,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '21':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(100,143,195,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '22':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(97,140,192,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '23':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(94,137,189,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '24':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(90,134,186,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '25':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(87,130,183,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '26':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(84,127,179,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '27':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(81,124,176,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '28':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(78,120,173,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '29':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(75,117,170,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '30':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(71,114,167,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '31':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(68,111,164,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '32':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(65,107,161,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '33':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(62,104,158,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '34':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(59,101,155,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '35':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(56,97,152,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '36':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(52,94,149,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '37':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(49,91,146,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '38':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(46,87,143,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '39':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(43,84,140,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '40':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(40,81,137,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '41':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(37,78,134,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '42':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(33,74,131,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '43':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(30,71,128,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '44':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(27,68,125,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '45':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(24,64,122,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '46':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(21,61,119,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '47':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(18,58,116,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '48':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(14,55,113,0.812)',
+                interactive: false,
+            }
+                    break;
+                case '49':
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(11,51,110,0.812)',
+                interactive: false,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_HvidovreStrandbeskyttelse_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.812)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,48,107,0.812)',
+                interactive: false,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_HvidovreStrandbeskyttelse_2');
+        map.getPane('pane_HvidovreStrandbeskyttelse_2').style.zIndex = 402;
+        map.getPane('pane_HvidovreStrandbeskyttelse_2').style['mix-blend-mode'] = 'normal';
+        var layer_HvidovreStrandbeskyttelse_2 = new L.geoJson(json_HvidovreStrandbeskyttelse_2, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_HvidovreStrandbeskyttelse_2',
+            layerName: 'layer_HvidovreStrandbeskyttelse_2',
+            pane: 'pane_HvidovreStrandbeskyttelse_2',
+            onEachFeature: pop_HvidovreStrandbeskyttelse_2,
+            style: style_HvidovreStrandbeskyttelse_2_0,
+        });
+        bounds_group.addLayer(layer_HvidovreStrandbeskyttelse_2);
+        map.addLayer(layer_HvidovreStrandbeskyttelse_2);
+        function pop_FrededeomrderiHvidovreKommune_3(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Temanavn</th>\
+                        <td>' + (feature.properties['Temanavn'] !== null ? autolinker.link(String(feature.properties['Temanavn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Offentlig</th>\
+                        <td>' + (feature.properties['Offentlig'] !== null ? autolinker.link(String(feature.properties['Offentlig']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">CVR_navn</th>\
+                        <td>' + (feature.properties['CVR_navn'] !== null ? autolinker.link(String(feature.properties['CVR_navn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Fred_tnavn</th>\
+                        <td>' + (feature.properties['Fred_tnavn'] !== null ? autolinker.link(String(feature.properties['Fred_tnavn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#f7fcf5',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#d5efcf',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#9ed798',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#55b567',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#1d8641',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#00441b',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#4daf4a',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#f7fcf5',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#d5efcf',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#9ed798',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#55b567',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#1d8641',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#00441b',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        var pattern_FrededeomrderiHvidovreKommune_3_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#4daf4a',
+            opacity: 0.452,
+            spaceOpacity: 0,
+            angle: 315
+        });
+        pattern_FrededeomrderiHvidovreKommune_3_0.addTo(map);
+        function style_FrededeomrderiHvidovreKommune_3_0(feature) {
+            switch(String(feature.properties['Fred_navn'])) {
+                case 'Unavngivende områder':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+                case 'Damhuså':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+                case 'Kalvebod Kile':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+                case 'Rehbæks Eng':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+                case 'Vestvolden':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+                case 'Vigerslevparken, Damhussøen, Damhusengen, Krogebjergparken':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_FrededeomrderiHvidovreKommune_3_0,
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        function style_FrededeomrderiHvidovreKommune_3_1(feature) {
+            switch(String(feature.properties['Fred_navn'])) {
+                case 'Unavngivende områder':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(247,252,245,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Damhuså':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(213,239,207,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Kalvebod Kile':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(158,215,152,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Rehbæks Eng':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(85,181,103,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Vestvolden':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(29,134,65,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Vigerslevparken, Damhussøen, Damhusengen, Krogebjergparken':
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(0,68,27,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_FrededeomrderiHvidovreKommune_3',
+                opacity: 1,
+                color: 'rgba(77,175,74,0.452)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_FrededeomrderiHvidovreKommune_3');
+        map.getPane('pane_FrededeomrderiHvidovreKommune_3').style.zIndex = 403;
+        map.getPane('pane_FrededeomrderiHvidovreKommune_3').style['mix-blend-mode'] = 'normal';
+        var layer_FrededeomrderiHvidovreKommune_3 = new L.geoJson.multiStyle(json_FrededeomrderiHvidovreKommune_3, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_FrededeomrderiHvidovreKommune_3',
+            layerName: 'layer_FrededeomrderiHvidovreKommune_3',
+            pane: 'pane_FrededeomrderiHvidovreKommune_3',
+            onEachFeature: pop_FrededeomrderiHvidovreKommune_3,
+            styles: [style_FrededeomrderiHvidovreKommune_3_0,style_FrededeomrderiHvidovreKommune_3_1,]
+        });
+        bounds_group.addLayer(layer_FrededeomrderiHvidovreKommune_3);
+        map.addLayer(layer_FrededeomrderiHvidovreKommune_3);
+        function pop_HvidovreKommune_4(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_HvidovreKommune_4_0() {
+            return {
+                pane: 'pane_HvidovreKommune_4',
+                opacity: 1,
+                color: 'rgba(255,0,201,1.0)',
+                dashArray: '',
+                lineCap: 'round',
+                lineJoin: 'round',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        map.createPane('pane_HvidovreKommune_4');
+        map.getPane('pane_HvidovreKommune_4').style.zIndex = 404;
+        map.getPane('pane_HvidovreKommune_4').style['mix-blend-mode'] = 'normal';
+        var layer_HvidovreKommune_4 = new L.geoJson(json_HvidovreKommune_4, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_HvidovreKommune_4',
+            layerName: 'layer_HvidovreKommune_4',
+            pane: 'pane_HvidovreKommune_4',
+            onEachFeature: pop_HvidovreKommune_4,
+            style: style_HvidovreKommune_4_0,
+        });
+        bounds_group.addLayer(layer_HvidovreKommune_4);
+        map.addLayer(layer_HvidovreKommune_4);
+        function pop_Kirker_5(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Name</th>\
+                        <td>' + (feature.properties['Name'] !== null ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['description'] !== null ? autolinker.link(String(feature.properties['description']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['timestamp'] !== null ? autolinker.link(String(feature.properties['timestamp']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['begin'] !== null ? autolinker.link(String(feature.properties['begin']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['end'] !== null ? autolinker.link(String(feature.properties['end']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['altitudeMode'] !== null ? autolinker.link(String(feature.properties['altitudeMode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['tessellate'] !== null ? autolinker.link(String(feature.properties['tessellate']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['extrude'] !== null ? autolinker.link(String(feature.properties['extrude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['visibility'] !== null ? autolinker.link(String(feature.properties['visibility']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['drawOrder'] !== null ? autolinker.link(String(feature.properties['drawOrder']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['icon'] !== null ? autolinker.link(String(feature.properties['icon']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Link'] !== null ? autolinker.link(String(feature.properties['Link']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Kirker_5_0() {
+            return {
+                pane: 'pane_Kirker_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Kirker_5.svg',
+            iconSize: [15.2, 15.2]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Kirker_5');
+        map.getPane('pane_Kirker_5').style.zIndex = 405;
+        map.getPane('pane_Kirker_5').style['mix-blend-mode'] = 'normal';
+        var layer_Kirker_5 = new L.geoJson(json_Kirker_5, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Kirker_5',
+            layerName: 'layer_Kirker_5',
+            pane: 'pane_Kirker_5',
+            onEachFeature: pop_Kirker_5,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Kirker_5_0(feature));
+            },
+        });
+        var cluster_Kirker_5 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_Kirker_5.addLayer(layer_Kirker_5);
+
+        bounds_group.addLayer(layer_Kirker_5);
+        cluster_Kirker_5.addTo(map);
+        function pop_Bibliotek_6(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['navn'] !== null ? autolinker.link(String(feature.properties['navn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Bibliotek_6_0() {
+            return {
+                pane: 'pane_Bibliotek_6',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Bibliotek_6.svg',
+            iconSize: [15.2, 15.2]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Bibliotek_6');
+        map.getPane('pane_Bibliotek_6').style.zIndex = 406;
+        map.getPane('pane_Bibliotek_6').style['mix-blend-mode'] = 'normal';
+        var layer_Bibliotek_6 = new L.geoJson(json_Bibliotek_6, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Bibliotek_6',
+            layerName: 'layer_Bibliotek_6',
+            pane: 'pane_Bibliotek_6',
+            onEachFeature: pop_Bibliotek_6,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Bibliotek_6_0(feature));
+            },
+        });
+        var cluster_Bibliotek_6 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_Bibliotek_6.addLayer(layer_Bibliotek_6);
+
+        bounds_group.addLayer(layer_Bibliotek_6);
+        cluster_Bibliotek_6.addTo(map);
+        function pop_Pizzarier_7(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td class="visible-with-data" id="fid" colspan="2"><strong>fid</strong><br />' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Pizzarier_7_0() {
+            return {
+                pane: 'pane_Pizzarier_7',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Pizzarier_7.svg',
+            iconSize: [14.446627199999998, 14.446627199999998]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Pizzarier_7');
+        map.getPane('pane_Pizzarier_7').style.zIndex = 407;
+        map.getPane('pane_Pizzarier_7').style['mix-blend-mode'] = 'normal';
+        var layer_Pizzarier_7 = new L.geoJson(json_Pizzarier_7, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Pizzarier_7',
+            layerName: 'layer_Pizzarier_7',
+            pane: 'pane_Pizzarier_7',
+            onEachFeature: pop_Pizzarier_7,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Pizzarier_7_0(feature));
+            },
+        });
+        var cluster_Pizzarier_7 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_Pizzarier_7.addLayer(layer_Pizzarier_7);
+
+        bounds_group.addLayer(layer_Pizzarier_7);
+        cluster_Pizzarier_7.addTo(map);
+        function pop_SkoleiHvidovre_8(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_SkoleiHvidovre_8_0() {
+            return {
+                pane: 'pane_SkoleiHvidovre_8',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/SkoleiHvidovre_8.svg',
+            iconSize: [18.24, 18.24]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_SkoleiHvidovre_8');
+        map.getPane('pane_SkoleiHvidovre_8').style.zIndex = 408;
+        map.getPane('pane_SkoleiHvidovre_8').style['mix-blend-mode'] = 'normal';
+        var layer_SkoleiHvidovre_8 = new L.geoJson(json_SkoleiHvidovre_8, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_SkoleiHvidovre_8',
+            layerName: 'layer_SkoleiHvidovre_8',
+            pane: 'pane_SkoleiHvidovre_8',
+            onEachFeature: pop_SkoleiHvidovre_8,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_SkoleiHvidovre_8_0(feature));
+            },
+        });
+        var cluster_SkoleiHvidovre_8 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_SkoleiHvidovre_8.addLayer(layer_SkoleiHvidovre_8);
+
+        bounds_group.addLayer(layer_SkoleiHvidovre_8);
+        cluster_SkoleiHvidovre_8.addTo(map);
+        function pop_Togstationer_9(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Name'] !== null ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Togstationer_9_0() {
+            return {
+                pane: 'pane_Togstationer_9',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Togstationer_9.svg',
+            iconSize: [16.72, 16.72]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Togstationer_9');
+        map.getPane('pane_Togstationer_9').style.zIndex = 409;
+        map.getPane('pane_Togstationer_9').style['mix-blend-mode'] = 'normal';
+        var layer_Togstationer_9 = new L.geoJson(json_Togstationer_9, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Togstationer_9',
+            layerName: 'layer_Togstationer_9',
+            pane: 'pane_Togstationer_9',
+            onEachFeature: pop_Togstationer_9,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Togstationer_9_0(feature));
+            },
+        });
+        var cluster_Togstationer_9 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_Togstationer_9.addLayer(layer_Togstationer_9);
+
+        bounds_group.addLayer(layer_Togstationer_9);
+        cluster_Togstationer_9.addTo(map);
+        const url = {"Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+        "France BAN": "https://api-adresse.data.gouv.fr/search/?"}
+        var photonControl = L.control.photon({
+            url: url["Nominatim OSM"],
+            feedbackLabel: '',
+            position: 'topleft',
+            includePosition: true,
+            initial: true,
+            // resultsHandler: myHandler,
+        }).addTo(map);
+        photonControl._container.childNodes[0].style.borderRadius="10px"
+        // Create a variable to store the geoJSON data
+        var x = null;
+        // Create a variable to store the marker
+        var marker = null;
+        // Add an event listener to the Photon control to create a marker from the returned geoJSON data
+        var z = null;
+        photonControl.on('selected', function(e) {
+            console.log(photonControl.search.resultsContainer);
+            if (x != null) {
+                map.removeLayer(obj3.marker);
+                map.removeLayer(x);
+            }
+            obj2.gcd = e.choice;
+            x = L.geoJSON(obj2.gcd).addTo(map);
+            var label = typeof obj2.gcd.properties.label === 'undefined' ? obj2.gcd.properties.display_name : obj2.gcd.properties.label;
+            obj3.marker = L.marker(x.getLayers()[0].getLatLng()).bindPopup(label).addTo(map);
+            map.setView(x.getLayers()[0].getLatLng(), 17);
+            z = typeof e.choice.properties.label === 'undefined'? e.choice.properties.display_name : e.choice.properties.label;
+            console.log(e);
+            e.target.input.value = z;
+        });
+        var search = document.getElementsByClassName("leaflet-photon leaflet-control")[0];
+        search.classList.add("leaflet-control-search")
+        search.style.display = "flex";
+        search.style.backgroundColor="rgba(255,255,255,0.5)" 
+
+        // Create the new button element
+        var button = document.createElement("div");
+        button.id = "gcd-button-control";
+        button.className = "gcd-gl-btn fa fa-search search-button";
+
+        // Insert the button at the beginning of the search control
+        search.insertBefore(button, search.firstChild);
+        last = search.lastChild;
+        last.style.display = "none";
+        button.addEventListener("click", function (e) {
+            if (last.style.display === "none") {
+                last.style.display = "block";
+            } else {
+                last.style.display = "none";
+            }
+        });
+        var overlaysTree = [
+        {label: '<b>Hvidovre Kort</b>',  selectAllCheckbox: true, children: [
+            {label: '<img src="legend/Togstationer_9.png" /> Togstationer', layer: cluster_Togstationer_9},
+            {label: '<img src="legend/SkoleiHvidovre_8.png" /> Skole i Hvidovre', layer: cluster_SkoleiHvidovre_8},
+            {label: '<img src="legend/Pizzarier_7.png" /> Pizzarier', layer: cluster_Pizzarier_7},
+            {label: '<img src="legend/Bibliotek_6.png" /> Bibliotek', layer: cluster_Bibliotek_6},
+            {label: '<img src="legend/Kirker_5.png" /> Kirker', layer: cluster_Kirker_5},
+            {label: '<img src="legend/HvidovreKommune_4.png" /> Hvidovre Kommune', layer: layer_HvidovreKommune_4},
+            {label: 'Fredede områder i Hvidovre Kommune<br /><table><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_Unavngivendeområder0.png" /></td><td>Unavngivende områder</td></tr><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_Damhuså1.png" /></td><td>Damhuså</td></tr><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_KalvebodKile2.png" /></td><td>Kalvebod Kile</td></tr><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_RehbæksEng3.png" /></td><td>Rehbæks Eng</td></tr><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_Vestvolden4.png" /></td><td>Vestvolden</td></tr><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_VigerslevparkenDamhussøenDamhusengenKrogebjergparken5.png" /></td><td>Vigerslevparken, Damhussøen, Damhusengen, Krogebjergparken</td></tr><tr><td style="text-align: center;"><img src="legend/FrededeomrderiHvidovreKommune_3_6.png" /></td><td></td></tr></table>', layer: layer_FrededeomrderiHvidovreKommune_3},
+            {label: 'Hvidovre Strandbeskyttelse<br /><table><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_10.png" /></td><td>1</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_21.png" /></td><td>2</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_32.png" /></td><td>3</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_43.png" /></td><td>4</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_54.png" /></td><td>5</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_65.png" /></td><td>6</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_76.png" /></td><td>7</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_87.png" /></td><td>8</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_98.png" /></td><td>9</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_109.png" /></td><td>10</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1110.png" /></td><td>11</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1211.png" /></td><td>12</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1312.png" /></td><td>13</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1413.png" /></td><td>14</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1514.png" /></td><td>15</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1615.png" /></td><td>16</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1716.png" /></td><td>17</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1817.png" /></td><td>18</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_1918.png" /></td><td>19</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2019.png" /></td><td>20</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2120.png" /></td><td>21</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2221.png" /></td><td>22</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2322.png" /></td><td>23</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2423.png" /></td><td>24</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2524.png" /></td><td>25</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2625.png" /></td><td>26</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2726.png" /></td><td>27</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2827.png" /></td><td>28</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_2928.png" /></td><td>29</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3029.png" /></td><td>30</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3130.png" /></td><td>31</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3231.png" /></td><td>32</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3332.png" /></td><td>33</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3433.png" /></td><td>34</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3534.png" /></td><td>35</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3635.png" /></td><td>36</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3736.png" /></td><td>37</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3837.png" /></td><td>38</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_3938.png" /></td><td>39</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4039.png" /></td><td>40</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4140.png" /></td><td>41</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4241.png" /></td><td>42</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4342.png" /></td><td>43</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4443.png" /></td><td>44</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4544.png" /></td><td>45</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4645.png" /></td><td>46</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4746.png" /></td><td>47</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4847.png" /></td><td>48</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_4948.png" /></td><td>49</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreStrandbeskyttelse_2_49.png" /></td><td></td></tr></table>', layer: layer_HvidovreStrandbeskyttelse_2},
+            {label: 'Hvidovre Lokalplan<br /><table><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_00.png" /></td><td>0</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_11.png" /></td><td>1</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_22.png" /></td><td>2</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_33.png" /></td><td>3</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_44.png" /></td><td>4</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_55.png" /></td><td>5</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_66.png" /></td><td>6</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_77.png" /></td><td>7</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_88.png" /></td><td>8</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_99.png" /></td><td>9</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1010.png" /></td><td>10</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1111.png" /></td><td>11</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1212.png" /></td><td>12</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1313.png" /></td><td>13</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1414.png" /></td><td>14</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1515.png" /></td><td>15</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1616.png" /></td><td>16</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1717.png" /></td><td>17</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1818.png" /></td><td>18</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_1919.png" /></td><td>19</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2020.png" /></td><td>20</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2121.png" /></td><td>21</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2222.png" /></td><td>22</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2323.png" /></td><td>23</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2424.png" /></td><td>24</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2525.png" /></td><td>25</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2626.png" /></td><td>26</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2727.png" /></td><td>27</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2828.png" /></td><td>28</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_2929.png" /></td><td>29</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3030.png" /></td><td>30</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3131.png" /></td><td>31</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3232.png" /></td><td>32</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3333.png" /></td><td>33</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3434.png" /></td><td>34</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3535.png" /></td><td>35</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3636.png" /></td><td>36</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3737.png" /></td><td>37</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3838.png" /></td><td>38</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_3939.png" /></td><td>39</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4040.png" /></td><td>40</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4141.png" /></td><td>41</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4242.png" /></td><td>42</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4343.png" /></td><td>43</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4444.png" /></td><td>44</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4545.png" /></td><td>45</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4646.png" /></td><td>46</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4747.png" /></td><td>47</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4848.png" /></td><td>48</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_4949.png" /></td><td>49</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5050.png" /></td><td>50</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5151.png" /></td><td>51</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5252.png" /></td><td>52</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5353.png" /></td><td>53</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5454.png" /></td><td>54</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5555.png" /></td><td>55</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5656.png" /></td><td>56</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5757.png" /></td><td>57</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5858.png" /></td><td>58</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_5959.png" /></td><td>59</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6060.png" /></td><td>60</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6161.png" /></td><td>61</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6262.png" /></td><td>62</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6363.png" /></td><td>63</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6464.png" /></td><td>64</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6565.png" /></td><td>65</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6666.png" /></td><td>66</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6767.png" /></td><td>67</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6868.png" /></td><td>68</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_6969.png" /></td><td>69</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7070.png" /></td><td>70</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7171.png" /></td><td>71</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7272.png" /></td><td>72</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7373.png" /></td><td>73</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7474.png" /></td><td>74</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7575.png" /></td><td>75</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7676.png" /></td><td>76</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7777.png" /></td><td>77</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7878.png" /></td><td>78</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_7979.png" /></td><td>79</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8080.png" /></td><td>80</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8181.png" /></td><td>81</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8282.png" /></td><td>82</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8383.png" /></td><td>83</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8484.png" /></td><td>84</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8585.png" /></td><td>85</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8686.png" /></td><td>86</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8787.png" /></td><td>87</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8888.png" /></td><td>88</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_8989.png" /></td><td>89</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9090.png" /></td><td>90</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9191.png" /></td><td>91</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9292.png" /></td><td>92</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9393.png" /></td><td>93</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9494.png" /></td><td>94</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9595.png" /></td><td>95</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9696.png" /></td><td>96</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9797.png" /></td><td>97</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9898.png" /></td><td>98</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_9999.png" /></td><td>99</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_100100.png" /></td><td>100</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_101101.png" /></td><td>101</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_102102.png" /></td><td>102</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_103103.png" /></td><td>103</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_104104.png" /></td><td>104</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_105105.png" /></td><td>105</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_106106.png" /></td><td>106</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_107107.png" /></td><td>107</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_108108.png" /></td><td>108</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_109109.png" /></td><td>109</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_110110.png" /></td><td>110</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_111111.png" /></td><td>111</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_112112.png" /></td><td>112</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_113113.png" /></td><td>113</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_114114.png" /></td><td>114</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_115115.png" /></td><td>115</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_116116.png" /></td><td>116</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_117117.png" /></td><td>117</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_118118.png" /></td><td>118</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_119119.png" /></td><td>119</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_120120.png" /></td><td>120</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_121121.png" /></td><td>121</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_122122.png" /></td><td>122</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_123123.png" /></td><td>123</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_124124.png" /></td><td>124</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_125125.png" /></td><td>125</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_126126.png" /></td><td>126</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_127127.png" /></td><td>127</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_128128.png" /></td><td>128</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_129129.png" /></td><td>129</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_130130.png" /></td><td>130</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_131131.png" /></td><td>131</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_132132.png" /></td><td>132</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_133133.png" /></td><td>133</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_134134.png" /></td><td>134</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_135135.png" /></td><td>135</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_136136.png" /></td><td>136</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_137137.png" /></td><td>137</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_138138.png" /></td><td>138</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_139139.png" /></td><td>139</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_140140.png" /></td><td>140</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_141141.png" /></td><td>141</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_142142.png" /></td><td>142</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_143143.png" /></td><td>143</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_144144.png" /></td><td>144</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_145145.png" /></td><td>145</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_146146.png" /></td><td>146</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_147147.png" /></td><td>147</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_148148.png" /></td><td>148</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_149149.png" /></td><td>149</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_150150.png" /></td><td>150</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_151151.png" /></td><td>151</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_152152.png" /></td><td>152</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_153153.png" /></td><td>153</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_154154.png" /></td><td>154</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_155155.png" /></td><td>155</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_156156.png" /></td><td>156</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_157157.png" /></td><td>157</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_158158.png" /></td><td>158</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_159159.png" /></td><td>159</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_160160.png" /></td><td>160</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_161161.png" /></td><td>161</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_162162.png" /></td><td>162</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_163163.png" /></td><td>163</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_164164.png" /></td><td>164</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_165165.png" /></td><td>165</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_166166.png" /></td><td>166</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_167167.png" /></td><td>167</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_168168.png" /></td><td>168</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_169169.png" /></td><td>169</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_170170.png" /></td><td>170</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_171171.png" /></td><td>171</td></tr><tr><td style="text-align: center;"><img src="legend/HvidovreLokalplan_1_172.png" /></td><td></td></tr></table>', layer: layer_HvidovreLokalplan_1},]},
+            {label: "Baggrundskort", layer: layer_Baggrundskort_0, radioGroup: 'bm' },]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        var i = 0;
+        layer_Kirker_5.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Name']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Kirker_5'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Bibliotek_6.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['navn'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['navn']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Bibliotek_6'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Pizzarier_7.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Name']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Pizzarier_7'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_SkoleiHvidovre_8.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Skolenavn'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Skolenavn']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_SkoleiHvidovre_8'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Togstationer_9.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Name']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Togstationer_9'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        resetLabels([layer_Kirker_5,layer_Bibliotek_6,layer_Pizzarier_7,layer_SkoleiHvidovre_8,layer_Togstationer_9]);
+        map.on("zoomend", function(){
+            resetLabels([layer_Kirker_5,layer_Bibliotek_6,layer_Pizzarier_7,layer_SkoleiHvidovre_8,layer_Togstationer_9]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_Kirker_5,layer_Bibliotek_6,layer_Pizzarier_7,layer_SkoleiHvidovre_8,layer_Togstationer_9]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_Kirker_5,layer_Bibliotek_6,layer_Pizzarier_7,layer_SkoleiHvidovre_8,layer_Togstationer_9]);
+        });
+        </script>        
+    </body>
+</html>
